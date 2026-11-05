@@ -31,8 +31,11 @@ The screenshots below were captured from the running Streamlit simulator using t
 - Automatic load shedding with configurable current limit
 - Configurable undervoltage, overvoltage, overcurrent, current-THD, and poor-PF alerts
 - AI-based electrical anomaly detection using an Isolation Forest and transparent threshold indicators
+- SCADA-style supervisory interface with an electrical single-line diagram, main-breaker status, load status, capacitor-bank status, alarms, and alarm acknowledgement
 - Digital-twin-style single-line visualization of the simulated system
 - Random Forest load-behaviour identification using synthetic training data
+- Non-Intrusive Load Monitoring (NILM) that infers appliance activity from aggregate electrical signatures
+- Transient detection for switching-related voltage/current peaks, duration measurement, event waveforms, and event logging
 - Session energy and estimated tariff tracking
 - Event history with state-change logging and CSV downloads for waveforms, measurement summaries, and events
 
@@ -42,6 +45,9 @@ The current app extends the original monitoring dashboard with:
 
 - A live measurement header showing voltage RMS, current RMS, true PF, current THD, voltage THD, active power, apparent power, fundamental reactive power, and displacement PF.
 - An **AI anomaly detection** tab that combines an Isolation Forest classification with configurable voltage, current, THD, and phase-displacement checks.
+- A **NILM** tab that independently infers heater, motor, capacitive-load, and rectifier activity from the common measurement-point signature and compares the inference with simulated equipment state.
+- A **Transient detection** tab that identifies short voltage/current deviations, measures their duration and peak magnitude, plots the event waveform, and maintains a transient event log.
+- A **SCADA overview** tab with a feeder single-line diagram, master-breaker control, energized/de-energized bus indication, equipment status table, capacitor-bank status, active alarms, and alarm acknowledgement.
 - Expanded operator controls for supply conditions, four load types, APFC target PF, load-shedding current limit, tariff, and alert thresholds.
 - Automatic event logging whenever active loads, capacitor stages, PF, THD, or shedding state changes.
 - Energy analytics with cumulative kWh, estimated tariff cost, current-window energy, and a reset control.
@@ -105,6 +111,7 @@ The simulation recalculates whenever a control changes. With every load disabled
 
 ### Automatic control
 
+- **Main breaker:** opens or closes the simulated feeder. When open, downstream loads are de-energized and the load bus is shown as de-energized.
 - **Automatic PF correction:** selects a combination of simulated 2, 4, and 8 µF capacitor stages to approach the target displacement PF for lagging loads.
 - **Automatic load shedding:** disconnects loads when current exceeds the configured limit. The demonstration priority is heater, nonlinear load, then motor.
 
@@ -116,8 +123,11 @@ Set the tariff and alert thresholds in the sidebar. Each Streamlit rerun adds on
 
 - **Waveforms & FFT:** Displays up to three cycles of voltage/current waveforms and harmonic magnitudes through the 40th harmonic.
 - **APFC & Load shedding:** Shows selected capacitor stages, PF-correction status, current threshold, and shed loads.
+- **SCADA overview:** Provides the operator-facing single-line diagram, breaker/load/capacitor statuses, active alarms, and alarm acknowledgement.
 - **Digital twin:** Shows the simulated supply, sensors, controller, load bus, loads, and APFC bank.
 - **ML identification:** Displays the predicted load behaviour and model scores.
+- **NILM:** Infers which appliances are operating from aggregate voltage/current features and reports per-appliance confidence and simulated-state agreement.
+- **Transient detection:** Detects simulated switching transients, displays voltage/current event waveforms and duration, and records the event history.
 - **AI anomaly detection:** Evaluates the current feature vector with an Isolation Forest and reports threshold indicators and anomaly reasons.
 - **Alerts & Events:** Shows active threshold alerts and the session event history.
 - **Energy:** Shows cumulative simulated energy, estimated cost, and the current-window energy.
@@ -137,6 +147,10 @@ Set the tariff and alert thresholds in the sidebar. Each Streamlit rerun adds on
 - Fundamental reactive power is estimated from the fundamental RMS values and phase angle.
 - Downloaded waveform data contains `time_s`, `voltage_V`, and `current_A` columns.
 - Downloaded summary data includes electrical measurements, THD, APFC/load-shedding state, and ML output.
+
+## NILM demonstration limitations
+
+The NILM classifier is trained at runtime on noisy synthetic signatures generated from the simulator's four appliance models and simulated capacitor stages. It demonstrates non-intrusive aggregate-signature classification, but its confidence is not field accuracy. For research use, replace the generated data with labelled common-point recordings from representative homes or facilities, then validate on separate operating sessions.
 
 ## ML demonstration limitations
 
