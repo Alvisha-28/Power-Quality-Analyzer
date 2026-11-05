@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, IsolationForest
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from itertools import product
@@ -141,6 +141,47 @@ features=[m["vr"],m["ir"],m["p"],abs(m["pf"]),m["angle"],m["ithd"]]+[
 prediction=model.predict([features])[0]
 confidence=float(np.max(model.predict_proba([features])[0])*100)
 
+# ----------------------------- AI anomaly detection ---------------------------
+# Synthetic normal-operation training data for demonstration only.
+@st.cache_resource
+def train_anomaly_detector():
+    rng = np.random.default_rng(123)
+    rows = []
+    for _ in range(3000):
+        vr = rng.normal(230, 4.0)
+        ir = rng.uniform(0.15, 5.0)
+        pf = rng.uniform(0.78, 1.0)
+        angle = rng.uniform(-25, 35)
+        thd = rng.uniform(0.2, 8.0)
+        p = vr * ir * pf
+        rows.append([vr, ir, p, pf, angle, thd,
+                     thd*rng.uniform(.20,.55),
+                     thd*rng.uniform(.08,.30),
+                     thd*rng.uniform(.03,.18)])
+    detector = IsolationForest(n_estimators=200, contamination=0.04, random_state=123)
+    detector.fit(np.asarray(rows))
+    return detector
+
+anomaly_model = train_anomaly_detector()
+anomaly_result = int(anomaly_model.predict([features])[0])  # 1=inlier, -1=outlier
+anomaly_score = float(anomaly_model.decision_function([features])[0])
+
+# Transparent threshold checks supplement the ML detector.
+anomaly_reasons = []
+if m["vr"] < 207 or m["vr"] > 253:
+    anomaly_reasons.append("Voltage is outside the illustrative 207–253 V operating band.")
+if m["ir"] > current_limit:
+    anomaly_reasons.append(f"Current exceeds the configured limit ({current_limit:.2f} A).")
+if m["ithd"] > thd_limit:
+    anomaly_reasons.append(f"Current THD exceeds the configured limit ({thd_limit:.1f}%).")
+if abs(m["angle"]) > 45:
+    anomaly_reasons.append("Fundamental voltage-current phase displacement is unusually large.")
+if anomaly_result == -1:
+    anomaly_reasons.append("Isolation Forest classified the combined measurement features as unusual.")
+
+is_anomaly = bool(anomaly_reasons)
+anomaly_status = "ANOMALY DETECTED" if is_anomaly else "Normal-looking operating point"
+
 if "energy_kwh" not in st.session_state: st.session_state.energy_kwh=0.0
 if "events" not in st.session_state: st.session_state.events=[]
 if "last_state" not in st.session_state: st.session_state.last_state=None
@@ -161,6 +202,7 @@ if m["ir"]>current_limit: alerts.append(("Overcurrent",f"Current exceeds {curren
 if m["ithd"]>thd_limit: alerts.append(("High current THD",f"Current THD exceeds {thd_limit:.1f}%","warning"))
 if active and abs(m["pf"])<.8: alerts.append(("Poor PF","True PF magnitude is below 0.80","warning"))
 if shed: alerts.append(("Load shedding","Disconnected: "+", ".join(shed),"warning"))
+if is_anomaly: alerts.append(("AI anomaly detection","; ".join(anomaly_reasons),"warning"))
 if apfc and cap: alerts.append(("APFC active",f"Connected total capacitor stage: {cap:g} µF","success"))
 if apfc and m["q"]< -1: alerts.append(("Leading load","No capacitor added because the load is already leading","warning"))
 
@@ -176,7 +218,7 @@ for col,label,val in zip(c,["Active power","Apparent power","Fundamental Q","Dis
                           [f'{m["p"]:.2f} W',f'{m["s"]:.2f} VA',f'{m["q"]:.2f} var',f'{abs(np.cos(np.deg2rad(m["angle"]))):.3f}']):
     col.metric(label,val)
 
-tabs=st.tabs(["Waveforms & FFT","APFC & Load shedding","Digital twin","ML identification","Alerts & Events","Energy","Downloads & notes"])
+tabs=st.tabs(["Waveforms & FFT","APFC & Load shedding","Digital twin","ML identification","AI anomaly detection","Alerts & Events","Energy","Downloads & notes"])
 
 with tabs[0]:
     end=min(len(t),int(3*fs/freq))
@@ -238,6 +280,35 @@ with tabs[3]:
     st.warning("This model is trained on synthetic feature data for demonstrating the workflow. Its score is not real-world accuracy. Replace the training data with labelled, calibrated hardware recordings and test on separate recording sessions.")
 
 with tabs[4]:
+    st.subheader("AI-based electrical anomaly detection")
+    st.write("Isolation Forest checks whether the current electrical feature vector looks unusual compared with its synthetic normal-operation training distribution.")
+    if is_anomaly:
+        st.error("⚠️ " + anomaly_status)
+    else:
+        st.success("✓ " + anomaly_status)
+    a, b = st.columns(2)
+    a.metric("Isolation Forest decision score", f"{anomaly_score:.4f}")
+    b.metric("AI classification", "Anomaly" if anomaly_result == -1 else "Inlier")
+    st.caption("Lower decision scores indicate more unusual observations; a negative score is generally classified as an outlier.")
+    anomaly_feature_table = pd.DataFrame({
+        "Feature": ["Voltage RMS", "Current RMS", "Active power", "True PF magnitude",
+                    "Fundamental phase angle", "Current THD", "H3/H1", "H5/H1", "H7/H1"],
+        "Value": features,
+        "Unit": ["V", "A", "W", "ratio", "degrees", "%", "%", "%", "%"]
+    })
+    st.markdown("#### Features evaluated")
+    st.dataframe(anomaly_feature_table, use_container_width=True, hide_index=True)
+    st.markdown("#### Reasons / indicators")
+    if anomaly_reasons:
+        for reason in anomaly_reasons:
+            st.warning(reason)
+    else:
+        st.info("No configured threshold violation or Isolation Forest outlier was detected.")
+    st.markdown("#### How to test")
+    st.write("Switch ON multiple loads, enable the nonlinear load, adjust supply voltage and change the current threshold. Observe the feature values and anomaly result.")
+    st.warning("Research limitation: this detector is trained on synthetic normal-operation data. It demonstrates the workflow but is not validated for real installations. Train using calibrated healthy measurements and validate against separately recorded abnormal cases. An anomaly flag does not diagnose a specific fault.")
+
+with tabs[5]:
     st.subheader("Active alerts")
     if not alerts: st.success("No configured alerts active.")
     for title,msg,level in alerts:
@@ -248,7 +319,7 @@ with tabs[4]:
     if st.session_state.events: st.dataframe(pd.DataFrame(st.session_state.events[::-1]),use_container_width=True,hide_index=True)
     else: st.caption("No events recorded yet.")
 
-with tabs[5]:
+with tabs[6]:
     st.subheader("Energy analytics")
     cost=st.session_state.energy_kwh*tariff
     st.metric("Cumulative simulated energy",f'{st.session_state.energy_kwh:.9f} kWh')
@@ -259,7 +330,7 @@ with tabs[5]:
         st.session_state.energy_kwh=0.0
         st.rerun()
 
-with tabs[6]:
+with tabs[7]:
     st.subheader("Measurement method")
     st.write(f"- Sampling: {fs:,} samples/s/channel; window: {window_ms} ms; samples: {len(t):,}.")
     st.write(f"- Nominal FFT-bin spacing: {fs/len(t):.2f} Hz; Nyquist frequency: {fs/2:.0f} Hz.")
