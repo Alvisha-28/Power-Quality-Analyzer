@@ -13,6 +13,14 @@ It calculates voltage and current RMS values, active and apparent power, true an
 
 > **Safety:** This is software only. Never connect a PC, ESP32, ADC, breadboard, or other unevaluated circuit directly to mains. Any physical prototype requires isolated, correctly rated sensing, protection, enclosure, calibration, and qualified supervision. Begin with an isolated low-voltage AC source.
 
+## Live simulator
+
+The screenshots below were captured from the running Streamlit simulator using the default controls.
+
+![Live simulator dashboard](docs/live-dashboard.png)
+
+![AI anomaly detection view](docs/ai-anomaly-detection.png)
+
 ## Features
 
 - Interactive supply voltage, frequency, sampling-rate, and measurement-window controls
@@ -22,10 +30,22 @@ It calculates voltage and current RMS values, active and apparent power, true an
 - Discrete APFC using simulated 2, 4, and 8 µF capacitor stages
 - Automatic load shedding with configurable current limit
 - Configurable undervoltage, overvoltage, overcurrent, current-THD, and poor-PF alerts
+- AI-based electrical anomaly detection using an Isolation Forest and transparent threshold indicators
 - Digital-twin-style single-line visualization of the simulated system
 - Random Forest load-behaviour identification using synthetic training data
 - Session energy and estimated tariff tracking
-- CSV downloads for waveforms, measurement summaries, and event history
+- Event history with state-change logging and CSV downloads for waveforms, measurement summaries, and events
+
+## What changed in the app
+
+The current app extends the original monitoring dashboard with:
+
+- A live measurement header showing voltage RMS, current RMS, true PF, current THD, voltage THD, active power, apparent power, fundamental reactive power, and displacement PF.
+- An **AI anomaly detection** tab that combines an Isolation Forest classification with configurable voltage, current, THD, and phase-displacement checks.
+- Expanded operator controls for supply conditions, four load types, APFC target PF, load-shedding current limit, tariff, and alert thresholds.
+- Automatic event logging whenever active loads, capacitor stages, PF, THD, or shedding state changes.
+- Energy analytics with cumulative kWh, estimated tariff cost, current-window energy, and a reset control.
+- Downloadable waveform, summary, and event-log CSV files.
 
 ## Requirements
 
@@ -98,6 +118,7 @@ Set the tariff and alert thresholds in the sidebar. Each Streamlit rerun adds on
 - **APFC & Load shedding:** Shows selected capacitor stages, PF-correction status, current threshold, and shed loads.
 - **Digital twin:** Shows the simulated supply, sensors, controller, load bus, loads, and APFC bank.
 - **ML identification:** Displays the predicted load behaviour and model scores.
+- **AI anomaly detection:** Evaluates the current feature vector with an Isolation Forest and reports threshold indicators and anomaly reasons.
 - **Alerts & Events:** Shows active threshold alerts and the session event history.
 - **Energy:** Shows cumulative simulated energy, estimated cost, and the current-window energy.
 - **Downloads & notes:** Provides measurement definitions and CSV downloads.
@@ -128,6 +149,9 @@ For research or deployment, replace the generated training data with labelled, c
 ```text
 Power_Quality_Monitoring_Simulator/
 ├── app.py
+├── docs/
+│   ├── ai-anomaly-detection.png
+│   └── live-dashboard.png
 ├── requirements.txt
 └── README.md
 ```
